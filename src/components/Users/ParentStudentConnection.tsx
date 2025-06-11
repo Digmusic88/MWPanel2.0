@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Users, Plus, X, Link2, Unlink, AlertCircle, CheckCircle, UserPlus } from 'lucide-react';
 import { User } from '../../types';
 import { useUsers } from '../../context/UsersContext';
+import ConfirmationModal from '../UI/ConfirmationModal';
 
 interface ParentStudentConnectionProps {
   user: User;
@@ -18,6 +19,17 @@ export default function ParentStudentConnection({
   const [isConnecting, setIsConnecting] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState('');
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    targetUserId: string;
+    targetUserName: string;
+    isLoading: boolean;
+  }>({
+    isOpen: false,
+    targetUserId: '',
+    targetUserName: '',
+    isLoading: false
+  });
 
   // Limpiar mensajes después de un tiempo
   React.useEffect(() => {
@@ -55,10 +67,18 @@ export default function ParentStudentConnection({
   };
 
   const handleDisconnect = async (targetUserId: string, targetUserName: string) => {
-    const targetType = user.role === 'parent' ? 'estudiante' : 'padre/tutor';
-    if (!window.confirm(`¿Estás seguro de que quieres desconectar a ${targetUserName}?\n\nEsta acción eliminará la conexión familiar.`)) {
-      return;
-    }
+    setConfirmModal({
+      isOpen: true,
+      targetUserId,
+      targetUserName,
+      isLoading: false
+    });
+  };
+
+  const confirmDisconnect = async () => {
+    const { targetUserId, targetUserName } = confirmModal;
+    
+    setConfirmModal(prev => ({ ...prev, isLoading: true }));
 
     try {
       if (user.role === 'parent') {
@@ -70,7 +90,23 @@ export default function ParentStudentConnection({
       setMessage({ type: 'success', text: `${targetUserName} desconectado exitosamente` });
       onConnectionChange?.();
     } catch (error: any) {
-      setMessage({ type: 'error', text: error.message || 'Error al desconectar usuarios' });
+      setConfirmModal({
+        isOpen: false,
+        targetUserId: '',
+        targetUserName: '',
+        isLoading: false
+      });
+    }
+  };
+
+  const closeConfirmModal = () => {
+    if (!confirmModal.isLoading) {
+      setConfirmModal({
+        isOpen: false,
+        targetUserId: '',
+        targetUserName: '',
+        isLoading: false
+      });
     }
   };
 
@@ -152,7 +188,8 @@ export default function ParentStudentConnection({
                 </div>
                 <button
                   onClick={() => handleDisconnect(connection.id, connection.name)}
-                  className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-all duration-200 transform hover:scale-110"
+                  className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-all duration-200 transform hover:scale-110 disabled:opacity-50"
+                  disabled={confirmModal.isLoading}
                   title={`Desconectar de ${connection.name}`}
                 >
                   <Unlink className="w-4 h-4" />
@@ -260,5 +297,18 @@ export default function ParentStudentConnection({
         </div>
       )}
     </div>
+
+    {/* Modal de Confirmación */}
+    <ConfirmationModal
+      isOpen={confirmModal.isOpen}
+      onClose={closeConfirmModal}
+      onConfirm={confirmDisconnect}
+      title="Confirmar Desvinculación"
+      message={`¿Estás seguro de que quieres desvincular a ${confirmModal.targetUserName}? Esta acción eliminará la conexión familiar y puede afectar el acceso a la información académica.`}
+      confirmText="Desvincular"
+      cancelText="Cancelar"
+      type="warning"
+      isLoading={confirmModal.isLoading}
+    />
   );
 }
