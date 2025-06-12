@@ -72,19 +72,14 @@ async function getCurso(id) {
   return db.data.cursos.find(curso => curso.id === id) || null;
 }
 
-async function getMateriasByCurso(cursoId, { includeArchived = false } = {}) {
+async function getMateriasByCurso(cursoId) {
   await loadDb();
-  return db.data.materias.filter(materia => {
-    const matchesCurso = materia.cursoId === cursoId;
-    return includeArchived ? matchesCurso : matchesCurso && !materia.archived;
-  });
+  return db.data.materias.filter(materia => materia.cursoId === cursoId);
 }
 
-async function getMaterias({ includeArchived = false } = {}) {
+async function getMaterias() {
   await loadDb();
-  return includeArchived 
-    ? db.data.materias 
-    : db.data.materias.filter(materia => !materia.archived);
+  return db.data.materias;
 }
 
 async function getMateria(id) {
@@ -165,8 +160,6 @@ async function addMateria(cursoId, nombre, datosExtra = {}) {
     name: nombre,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-    archived: false,
-    archivedAt: null,
     ...datosExtra
   };
   
@@ -237,72 +230,6 @@ async function updateMateria(id, datos) {
   db.data.materias[index] = {
     ...db.data.materias[index],
     ...datos,
-    updatedAt: new Date().toISOString()
-  };
-  
-  await saveDb();
-  
-  return { success: true, materia: db.data.materias[index] };
-}
-
-async function archiveMateria(id) {
-  await loadDb();
-  
-  const index = db.data.materias.findIndex(materia => materia.id === id);
-  if (index === -1) {
-    return { 
-      success: false, 
-      message: `No existe una materia con el ID: ${id}` 
-    };
-  }
-  
-  // Si ya está archivada, no hacer nada pero devolver éxito
-  if (db.data.materias[index].archived) {
-    return { 
-      success: true, 
-      materia: db.data.materias[index],
-      message: 'La materia ya estaba archivada' 
-    };
-  }
-  
-  // Archivar materia
-  db.data.materias[index] = {
-    ...db.data.materias[index],
-    archived: true,
-    archivedAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  };
-  
-  await saveDb();
-  
-  return { success: true, materia: db.data.materias[index] };
-}
-
-async function unarchiveMateria(id) {
-  await loadDb();
-  
-  const index = db.data.materias.findIndex(materia => materia.id === id);
-  if (index === -1) {
-    return { 
-      success: false, 
-      message: `No existe una materia con el ID: ${id}` 
-    };
-  }
-  
-  // Si no está archivada, no hacer nada pero devolver éxito
-  if (!db.data.materias[index].archived) {
-    return { 
-      success: true, 
-      materia: db.data.materias[index],
-      message: 'La materia no estaba archivada' 
-    };
-  }
-  
-  // Desarchivar materia
-  db.data.materias[index] = {
-    ...db.data.materias[index],
-    archived: false,
-    archivedAt: null,
     updatedAt: new Date().toISOString()
   };
   
@@ -449,8 +376,6 @@ export {
   addMateria,
   updateCurso,
   updateMateria,
-  archiveMateria,
-  unarchiveMateria,
   deleteCurso,
   deleteMateria,
   syncNames

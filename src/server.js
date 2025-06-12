@@ -13,8 +13,6 @@ import {
   addMateria,
   updateCurso,
   updateMateria,
-  archiveMateria,
-  unarchiveMateria,
   deleteCurso,
   deleteMateria,
   syncNames
@@ -116,8 +114,7 @@ app.delete('/api/cursos/:id', async (req, res) => {
 // Materias
 app.get('/api/materias', async (req, res) => {
   try {
-    const includeArchived = req.query.includeArchived === 'true';
-    const materias = await getMaterias({ includeArchived });
+    const materias = await getMaterias();
     res.status(200).json(materias);
   } catch (error) {
     console.error('Error al obtener materias:', error);
@@ -145,8 +142,7 @@ app.get('/api/cursos/:id/materias', async (req, res) => {
       return res.status(404).json({ error: 'Curso no encontrado' });
     }
     
-    const includeArchived = req.query.includeArchived === 'true';
-    const materias = await getMateriasByCurso(req.params.id, { includeArchived });
+    const materias = await getMateriasByCurso(req.params.id);
     res.status(200).json(materias);
   } catch (error) {
     console.error('Error al obtener materias del curso:', error);
@@ -191,36 +187,6 @@ app.put('/api/materias/:id', async (req, res) => {
     res.status(200).json(resultado.materia);
   } catch (error) {
     console.error('Error al actualizar materia:', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
-  }
-});
-
-app.patch('/api/materias/:id/archive', async (req, res) => {
-  try {
-    const resultado = await archiveMateria(req.params.id);
-    
-    if (!resultado.success) {
-      return res.status(404).json({ error: resultado.message });
-    }
-    
-    res.status(200).json(resultado.materia);
-  } catch (error) {
-    console.error('Error al archivar materia:', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
-  }
-});
-
-app.patch('/api/materias/:id/unarchive', async (req, res) => {
-  try {
-    const resultado = await unarchiveMateria(req.params.id);
-    
-    if (!resultado.success) {
-      return res.status(404).json({ error: resultado.message });
-    }
-    
-    res.status(200).json(resultado.materia);
-  } catch (error) {
-    console.error('Error al desarchivar materia:', error);
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
