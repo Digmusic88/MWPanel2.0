@@ -1,0 +1,178 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Mejoras de accesibilidad y animaciones */
+@layer base {
+  /* Focus styles para accesibilidad */
+  *:focus {
+    outline: 2px solid theme('colors.emerald.500');
+    outline-offset: 2px;
+  }
+
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Mejoras de contraste para texto */
+  body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer components {
+  /* Botones con estados mejorados */
+  .btn-primary {
+    @apply bg-emerald-600 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 transform hover:bg-emerald-700 hover:shadow-lg hover:scale-105 focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 active:scale-95;
+  }
+
+  .btn-secondary {
+    @apply bg-gray-100 text-gray-700 px-4 py-2 rounded-lg font-medium transition-all duration-200 transform hover:bg-gray-200 hover:shadow-sm hover:scale-105 focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 active:scale-95;
+  }
+
+  /* Cards con hover mejorado */
+  .card-hover {
+    @apply transition-all duration-200 transform hover:shadow-md hover:scale-102;
+  }
+
+  /* Sidebar transitions */
+  .sidebar-transition {
+    @apply transition-all duration-300 ease-in-out;
+  }
+
+  /* Tooltip styles */
+  .tooltip {
+    @apply absolute z-50 px-2 py-1 text-sm text-white bg-gray-900 rounded opacity-0 invisible transition-all duration-200 whitespace-nowrap;
+  }
+
+  .tooltip-visible {
+    @apply opacity-100 visible;
+  }
+}
+
+@layer utilities {
+  /* Animaciones personalizadas */
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+  }
+
+  .animate-slide-in {
+    animation: slideIn 0.3s ease-out;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn 0.2s ease-out;
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn 0.2s ease-out;
+  }
+
+  /* Utilidades de transformación */
+  .scale-102 {
+    transform: scale(1.02);
+  }
+
+  .scale-105 {
+    transform: scale(1.05);
+  }
+
+  .scale-110 {
+    transform: scale(1.1);
+  }
+
+  /* Utilidades de sombra */
+  .shadow-soft {
+    box-shadow: 0 2px 15px -3px rgba(0, 0, 0, 0.07), 0 10px 20px -2px rgba(0, 0, 0, 0.04);
+  }
+
+  /* Scrollbar personalizado */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: theme('colors.gray.400') theme('colors.gray.100');
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: theme('colors.gray.100');
+    border-radius: 3px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: theme('colors.gray.400');
+    border-radius: 3px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: theme('colors.gray.500');
+  }
+}
+
+/* Keyframes para animaciones */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(-10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Mejoras para dispositivos móviles */
+@media (max-width: 768px) {
+  .sidebar-transition {
+    transform: translateX(-100%);
+  }
+
+  .sidebar-transition.open {
+    transform: translateX(0);
+  }
+}
+
+/* Mejoras de accesibilidad para usuarios con preferencias de movimiento reducido */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Mejoras de contraste para modo oscuro (preparación futura) */
+@media (prefers-color-scheme: dark) {
+  /* Estilos para modo oscuro se pueden agregar aquí en el futuro */
+}
