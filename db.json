@@ -1,0 +1,36 @@
+{
+  "cursos": [
+    {
+      "id": "BEJAZ7G4AuHSaU9obHlF8",
+      "name": "Curso Demo",
+      "createdAt": "2025-06-12T22:49:54.101Z",
+      "updatedAt": "2025-06-12T22:49:54.101Z",
+      "description": "Curso de demostración",
+      "isActive": true
+    }
+  ],
+  "materias": [
+    {
+      "id": "c5YMKjjqK127_6ZgtSKmI",
+      "cursoId": "BEJAZ7G4AuHSaU9obHlF8",
+      "name": "Materia Demo 1",
+      "createdAt": "2025-06-12T22:49:54.102Z",
+      "updatedAt": "2025-06-12T22:49:54.102Z",
+      "archived": false,
+      "archivedAt": null,
+      "description": "Materia de demostración 1",
+      "isActive": true
+    },
+    {
+      "id": "NQ4aScf5qTboGPNbwfEso",
+      "cursoId": "BEJAZ7G4AuHSaU9obHlF8",
+      "name": "Materia Demo 2",
+      "createdAt": "2025-06-12T22:49:54.105Z",
+      "updatedAt": "2025-06-12T22:49:54.105Z",
+      "archived": false,
+      "archivedAt": null,
+      "description": "Materia de demostración 2",
+      "isActive": true
+    }
+  ]
+}
