@@ -2,56 +2,65 @@ import React, { useState, useEffect } from 'react';
 import { 
   Plus, 
   BookOpen, 
-  Users, 
+  Search, 
+  Filter, 
   Edit, 
   Trash2, 
-  Eye, 
+  Archive, 
+  ArchiveRestore,
   AlertCircle, 
   CheckCircle, 
   Loader2,
   X,
-  Search,
-  Filter
+  Eye,
+  Grid3X3,
+  List
 } from 'lucide-react';
-import { coursesService, Course, Subject, CourseWithSubjects } from '../../services/coursesService';
+import { cursosMateriasService, CursoMateria, CursoMateriaInput } from '../../services/cursosMateriasService';
 
 interface Notification {
   type: 'success' | 'error' | 'info';
   message: string;
 }
 
-interface CourseFormData {
-  name: string;
-  description: string;
-}
-
-interface SubjectFormData {
-  name: string;
-  credits: number;
-  course_id: string;
-}
+const CATEGORIAS = ['Ciencias', 'Humanidades', 'Tecnología', 'Artes', 'Deportes'];
 
 export default function CursosMateriasPage() {
   // Estado principal
-  const [courses, setCourses] = useState<CourseWithSubjects[]>([]);
+  const [cursosMaterias, setCursosMaterias] = useState<CursoMateria[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notification, setNotification] = useState<Notification | null>(null);
 
-  // Estado de modales
-  const [showCourseForm, setShowCourseForm] = useState(false);
-  const [showSubjectForm, setShowSubjectForm] = useState(false);
-  const [editingCourse, setEditingCourse] = useState<Course | null>(null);
-  const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
-  const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
+  // Estado de filtros y búsqueda
+  const [searchQuery, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [showArchived, setShowArchived] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
-  // Estado de formularios
-  const [courseFormData, setCourseFormData] = useState<CourseFormData>({ name: '', description: '' });
-  const [subjectFormData, setSubjectFormData] = useState<SubjectFormData>({ name: '', credits: 3, course_id: '' });
+  // Estado de modales
+  const [showForm, setShowForm] = useState(false);
+  const [editingItem, setEditingItem] = useState<CursoMateria | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Estado de filtros
-  const [searchQuery, setSearchQuery] = useState('');
+  // Estado del formulario
+  const [formData, setFormData] = useState<CursoMateriaInput>({
+    nombre: '',
+    descripcion: '',
+    categoria: CATEGORIAS[0]
+  });
+
+  // Suscripción a cambios en tiempo real
+  useEffect(() => {
+    const subscription = cursosMateriasService.subscribeToChanges((payload) => {
+      console.log('Cambio en tiempo real:', payload);
+      loadData(); // Recargar datos cuando hay cambios
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   // Cargar datos iniciales
   useEffect(() => {
@@ -78,13 +87,13 @@ export default function CursosMateriasPage() {
       setError(null);
 
       // Verificar conexión
-      const isConnected = await coursesService.checkConnection();
+      const isConnected = await cursosMateriasService.checkConnection();
       if (!isConnected) {
         throw new Error('No se pudo conectar a la base de datos. Verifica tu configuración de Supabase.');
       }
 
-      const data = await coursesService.getCoursesWithSubjects();
-      setCourses(data);
+      const data = await cursosMateriasService.getAll();
+      setCursosMaterias(data);
     } catch (err: any) {
       console.error('Error loading data:', err);
       setError(err.message || 'Error al cargar los datos');
@@ -93,129 +102,116 @@ export default function CursosMateriasPage() {
     }
   };
 
-  // Gestión de cursos
-  const handleCreateCourse = () => {
-    setEditingCourse(null);
-    setCourseFormData({ name: '', description: '' });
-    setShowCourseForm(true);
-  };
-
-  const handleEditCourse = (course: Course) => {
-    setEditingCourse(course);
-    setCourseFormData({ name: course.name, description: course.description || '' });
-    setShowCourseForm(true);
-  };
-
-  const handleSaveCourse = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!courseFormData.name.trim()) {
-      showNotification('error', 'El nombre del curso es obligatorio');
-      return;
-    }
-
-    try {
-      setIsSubmitting(true);
-      
-      if (editingCourse) {
-        await coursesService.updateCourse(editingCourse.id, courseFormData);
-        showNotification('success', 'Curso actualizado exitosamente');
-      } else {
-        await coursesService.createCourse(courseFormData);
-        showNotification('success', 'Curso creado exitosamente');
-      }
-
-      setShowCourseForm(false);
-      await loadData();
-    } catch (err: any) {
-      showNotification('error', err.message || 'Error al guardar el curso');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleDeleteCourse = async (course: Course) => {
-    if (!window.confirm(`¿Estás seguro de que quieres eliminar el curso "${course.name}"?`)) {
-      return;
-    }
-
-    try {
-      await coursesService.deleteCourse(course.id);
-      showNotification('success', 'Curso eliminado exitosamente');
-      await loadData();
-    } catch (err: any) {
-      showNotification('error', err.message || 'Error al eliminar el curso');
-    }
-  };
-
-  // Gestión de materias
-  const handleCreateSubject = (course: Course) => {
-    setEditingSubject(null);
-    setSubjectFormData({ name: '', credits: 3, course_id: course.id });
-    setSelectedCourse(course);
-    setShowSubjectForm(true);
-  };
-
-  const handleEditSubject = (subject: Subject) => {
-    setEditingSubject(subject);
-    setSubjectFormData({ 
-      name: subject.name, 
-      credits: subject.credits, 
-      course_id: subject.course_id 
+  // Gestión del formulario
+  const handleCreate = () => {
+    setEditingItem(null);
+    setFormData({
+      nombre: '',
+      descripcion: '',
+      categoria: CATEGORIAS[0]
     });
-    setSelectedCourse(courses.find(c => c.id === subject.course_id) || null);
-    setShowSubjectForm(true);
+    setShowForm(true);
   };
 
-  const handleSaveSubject = async (e: React.FormEvent) => {
+  const handleEdit = (item: CursoMateria) => {
+    setEditingItem(item);
+    setFormData({
+      nombre: item.nombre,
+      descripcion: item.descripcion || '',
+      categoria: item.categoria
+    });
+    setShowForm(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!subjectFormData.name.trim()) {
-      showNotification('error', 'El nombre de la materia es obligatorio');
+    
+    if (!formData.nombre.trim()) {
+      showNotification('error', 'El nombre es obligatorio');
       return;
     }
 
     try {
       setIsSubmitting(true);
       
-      if (editingSubject) {
-        await coursesService.updateSubject(editingSubject.id, subjectFormData);
-        showNotification('success', 'Materia actualizada exitosamente');
+      if (editingItem) {
+        await cursosMateriasService.update(editingItem.id, formData);
+        showNotification('success', 'Curso/Materia actualizado exitosamente');
       } else {
-        await coursesService.createSubject(subjectFormData);
-        showNotification('success', 'Materia creada exitosamente');
+        await cursosMateriasService.create(formData);
+        showNotification('success', 'Curso/Materia creado exitosamente');
       }
 
-      setShowSubjectForm(false);
+      setShowForm(false);
       await loadData();
     } catch (err: any) {
-      showNotification('error', err.message || 'Error al guardar la materia');
+      showNotification('error', err.message || 'Error al guardar');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleDeleteSubject = async (subject: Subject) => {
-    if (!window.confirm(`¿Estás seguro de que quieres eliminar la materia "${subject.name}"?`)) {
+  const handleDelete = async (item: CursoMateria) => {
+    if (!window.confirm(`¿Estás seguro de que quieres eliminar "${item.nombre}"?`)) {
       return;
     }
 
     try {
-      await coursesService.deleteSubject(subject.id);
-      showNotification('success', 'Materia eliminada exitosamente');
+      await cursosMateriasService.delete(item.id);
+      showNotification('success', 'Curso/Materia eliminado exitosamente');
       await loadData();
     } catch (err: any) {
-      showNotification('error', err.message || 'Error al eliminar la materia');
+      showNotification('error', err.message || 'Error al eliminar');
     }
   };
 
-  // Filtrar cursos
-  const filteredCourses = courses.filter(course =>
-    !searchQuery || 
-    course.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    course.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    course.subjects.some(subject => 
-      subject.name.toLowerCase().includes(searchQuery.toLowerCase())
-    )
-  );
+  const handleToggleArchive = async (item: CursoMateria) => {
+    const action = item.archivado ? 'desarchivar' : 'archivar';
+    
+    if (!window.confirm(`¿Estás seguro de que quieres ${action} "${item.nombre}"?`)) {
+      return;
+    }
+
+    try {
+      await cursosMateriasService.toggleArchive(item.id, !item.archivado);
+      showNotification('success', `Curso/Materia ${item.archivado ? 'desarchivado' : 'archivado'} exitosamente`);
+      await loadData();
+    } catch (err: any) {
+      showNotification('error', err.message || `Error al ${action}`);
+    }
+  };
+
+  // Filtrar datos
+  const filteredData = cursosMaterias.filter(item => {
+    // Filtro de archivado
+    if (showArchived !== item.archivado) return false;
+    
+    // Filtro de categoría
+    if (categoryFilter !== 'all' && item.categoria !== categoryFilter) return false;
+    
+    // Filtro de búsqueda
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      return (
+        item.nombre.toLowerCase().includes(query) ||
+        item.descripcion?.toLowerCase().includes(query) ||
+        item.categoria.toLowerCase().includes(query)
+      );
+    }
+    
+    return true;
+  });
+
+  // Estadísticas
+  const stats = {
+    total: cursosMaterias.length,
+    activos: cursosMaterias.filter(item => !item.archivado).length,
+    archivados: cursosMaterias.filter(item => item.archivado).length,
+    porCategoria: CATEGORIAS.reduce((acc, cat) => {
+      acc[cat] = cursosMaterias.filter(item => item.categoria === cat && !item.archivado).length;
+      return acc;
+    }, {} as Record<string, number>)
+  };
 
   if (loading) {
     return (
@@ -268,15 +264,37 @@ export default function CursosMateriasPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Cursos y Materias</h1>
-          <p className="text-gray-600">Gestiona los cursos académicos y sus materias</p>
+          <p className="text-gray-600">Gestiona el catálogo académico de la institución</p>
         </div>
-        <button
-          onClick={handleCreateCourse}
-          className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Nuevo Curso</span>
-        </button>
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={() => setShowArchived(!showArchived)}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              showArchived
+                ? 'bg-orange-600 text-white hover:bg-orange-700'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            {showArchived ? (
+              <>
+                <Eye className="h-4 w-4 inline mr-2" />
+                Ver Activos
+              </>
+            ) : (
+              <>
+                <Archive className="h-4 w-4 inline mr-2" />
+                Ver Archivados
+              </>
+            )}
+          </button>
+          <button
+            onClick={handleCreate}
+            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Nuevo</span>
+          </button>
+        </div>
       </div>
 
       {/* Error Message */}
@@ -295,164 +313,345 @@ export default function CursosMateriasPage() {
         </div>
       )}
 
-      {/* Search */}
-      <div className="bg-white p-4 rounded-lg shadow-sm border">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Buscar cursos o materias..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
+      {/* Estadísticas */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="bg-white p-6 rounded-lg shadow-sm border">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Total</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+            </div>
+            <BookOpen className="h-8 w-8 text-blue-600" />
+          </div>
+        </div>
+        
+        <div className="bg-white p-6 rounded-lg shadow-sm border">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Activos</p>
+              <p className="text-2xl font-bold text-green-600">{stats.activos}</p>
+            </div>
+            <CheckCircle className="h-8 w-8 text-green-600" />
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-lg shadow-sm border">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Archivados</p>
+              <p className="text-2xl font-bold text-orange-600">{stats.archivados}</p>
+            </div>
+            <Archive className="h-8 w-8 text-orange-600" />
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-lg shadow-sm border">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Categorías</p>
+              <p className="text-2xl font-bold text-purple-600">{CATEGORIAS.length}</p>
+            </div>
+            <Filter className="h-8 w-8 text-purple-600" />
+          </div>
         </div>
       </div>
 
-      {/* Courses List */}
-      {filteredCourses.length === 0 ? (
+      {/* Filtros y búsqueda */}
+      <div className="bg-white p-6 rounded-lg shadow-sm border">
+        <div className="flex flex-col lg:flex-row gap-4">
+          {/* Búsqueda */}
+          <div className="flex-1">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <input
+                type="text"
+                placeholder="Buscar por nombre, descripción o categoría..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+
+          {/* Filtros */}
+          <div className="flex flex-col sm:flex-row gap-4">
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="all">Todas las categorías</option>
+              {CATEGORIAS.map(categoria => (
+                <option key={categoria} value={categoria}>
+                  {categoria} ({stats.porCategoria[categoria] || 0})
+                </option>
+              ))}
+            </select>
+
+            {/* Toggle de vista */}
+            <div className="flex items-center bg-gray-100 rounded-lg p-1">
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`flex items-center space-x-2 px-3 py-2 rounded-md transition-all ${
+                  viewMode === 'grid'
+                    ? 'bg-white text-blue-600 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <Grid3X3 className="w-4 h-4" />
+                <span className="text-sm font-medium">Tarjetas</span>
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                className={`flex items-center space-x-2 px-3 py-2 rounded-md transition-all ${
+                  viewMode === 'list'
+                    ? 'bg-white text-blue-600 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <List className="w-4 h-4" />
+                <span className="text-sm font-medium">Lista</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Contenido principal */}
+      {filteredData.length === 0 ? (
         <div className="bg-white rounded-lg shadow-sm border p-12 text-center">
           <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">
-            {searchQuery ? 'No se encontraron resultados' : 'No hay cursos disponibles'}
+            {searchQuery || categoryFilter !== 'all' 
+              ? 'No se encontraron resultados' 
+              : showArchived 
+                ? 'No hay elementos archivados'
+                : 'No hay cursos/materias disponibles'
+            }
           </h3>
           <p className="text-gray-600 mb-6">
-            {searchQuery 
-              ? 'Intenta con otros términos de búsqueda'
-              : 'Comienza creando tu primer curso académico'
+            {searchQuery || categoryFilter !== 'all'
+              ? 'Intenta ajustar los filtros de búsqueda'
+              : showArchived
+                ? 'Los elementos archivados aparecerán aquí'
+                : 'Comienza creando tu primer curso o materia'
             }
           </p>
-          {!searchQuery && (
+          {!searchQuery && categoryFilter === 'all' && !showArchived && (
             <button
-              onClick={handleCreateCourse}
+              onClick={handleCreate}
               className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 mx-auto"
             >
               <Plus className="h-5 w-5" />
-              Crear Primer Curso
+              Crear Primero
             </button>
           )}
         </div>
-      ) : (
-        <div className="space-y-6">
-          {filteredCourses.map(course => (
-            <div key={course.id} className="bg-white rounded-lg shadow-sm border overflow-hidden">
-              {/* Course Header */}
-              <div className="p-6 border-b border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900">{course.name}</h3>
-                    {course.description && (
-                      <p className="text-gray-600 mt-1">{course.description}</p>
-                    )}
-                    <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
-                      <span>{course.subjects.length} materias</span>
-                      <span>Creado: {new Date(course.created_at).toLocaleDateString('es-ES')}</span>
-                    </div>
+      ) : viewMode === 'grid' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredData.map(item => (
+            <div key={item.id} className="bg-white rounded-lg shadow-sm border hover:shadow-md transition-shadow overflow-hidden">
+              {/* Header de la tarjeta */}
+              <div className="p-6 pb-4">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-lg text-gray-900 mb-2">{item.nombre}</h3>
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                      item.categoria === 'Ciencias' ? 'bg-blue-100 text-blue-800' :
+                      item.categoria === 'Humanidades' ? 'bg-purple-100 text-purple-800' :
+                      item.categoria === 'Tecnología' ? 'bg-green-100 text-green-800' :
+                      item.categoria === 'Artes' ? 'bg-pink-100 text-pink-800' :
+                      'bg-orange-100 text-orange-800'
+                    }`}>
+                      {item.categoria}
+                    </span>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => handleCreateSubject(course)}
-                      className="flex items-center space-x-1 px-3 py-2 text-sm bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>Materia</span>
-                    </button>
-                    <button
-                      onClick={() => handleEditCourse(course)}
-                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                    >
-                      <Edit className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteCourse(course)}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                  
+                  <div className={`px-3 py-1 rounded-full text-xs font-medium ${
+                    item.archivado ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800'
+                  }`}>
+                    {item.archivado ? 'Archivado' : 'Activo'}
                   </div>
+                </div>
+
+                {item.descripcion && (
+                  <p className="text-sm text-gray-600 mb-4 line-clamp-3">{item.descripcion}</p>
+                )}
+
+                <div className="text-xs text-gray-500">
+                  Creado: {new Date(item.creado_en).toLocaleDateString('es-ES')}
                 </div>
               </div>
 
-              {/* Subjects */}
-              <div className="p-6">
-                {course.subjects.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    <BookOpen className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-                    <p className="text-sm">No hay materias en este curso</p>
-                    <button
-                      onClick={() => handleCreateSubject(course)}
-                      className="mt-2 text-blue-600 hover:text-blue-700 text-sm"
-                    >
-                      Agregar primera materia
-                    </button>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {course.subjects.map(subject => (
-                      <div key={subject.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                        <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-medium text-gray-900">{subject.name}</h4>
-                          <div className="flex items-center space-x-1">
-                            <button
-                              onClick={() => handleEditSubject(subject)}
-                              className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                            >
-                              <Edit className="w-3 h-3" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteSubject(subject)}
-                              className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
-                          </div>
-                        </div>
-                        <div className="text-sm text-gray-600">
-                          <span>{subject.credits} créditos</span>
-                        </div>
-                        <div className="text-xs text-gray-500 mt-1">
-                          Creada: {new Date(subject.created_at).toLocaleDateString('es-ES')}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+              {/* Acciones */}
+              <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
+                <div className="flex items-center justify-end space-x-2">
+                  <button
+                    onClick={() => handleEdit(item)}
+                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    title="Editar"
+                  >
+                    <Edit className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleToggleArchive(item)}
+                    className={`p-2 rounded-lg transition-colors ${
+                      item.archivado 
+                        ? 'text-green-600 hover:bg-green-50' 
+                        : 'text-orange-600 hover:bg-orange-50'
+                    }`}
+                    title={item.archivado ? 'Desarchivar' : 'Archivar'}
+                  >
+                    {item.archivado ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
+                  </button>
+                  <button
+                    onClick={() => handleDelete(item)}
+                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    title="Eliminar"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </div>
           ))}
         </div>
+      ) : (
+        <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Nombre
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Categoría
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Estado
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Creado
+                  </th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Acciones
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredData.map(item => (
+                  <tr key={item.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">{item.nombre}</div>
+                        {item.descripcion && (
+                          <div className="text-sm text-gray-500 truncate max-w-xs">{item.descripcion}</div>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                        item.categoria === 'Ciencias' ? 'bg-blue-100 text-blue-800' :
+                        item.categoria === 'Humanidades' ? 'bg-purple-100 text-purple-800' :
+                        item.categoria === 'Tecnología' ? 'bg-green-100 text-green-800' :
+                        item.categoria === 'Artes' ? 'bg-pink-100 text-pink-800' :
+                        'bg-orange-100 text-orange-800'
+                      }`}>
+                        {item.categoria}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                        item.archivado ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800'
+                      }`}>
+                        {item.archivado ? 'Archivado' : 'Activo'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {new Date(item.creado_en).toLocaleDateString('es-ES')}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <div className="flex items-center justify-end space-x-2">
+                        <button
+                          onClick={() => handleEdit(item)}
+                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleToggleArchive(item)}
+                          className={`p-2 rounded-lg transition-colors ${
+                            item.archivado 
+                              ? 'text-green-600 hover:bg-green-50' 
+                              : 'text-orange-600 hover:bg-orange-50'
+                          }`}
+                        >
+                          {item.archivado ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
+                        </button>
+                        <button
+                          onClick={() => handleDelete(item)}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
 
-      {/* Course Form Modal */}
-      {showCourseForm && (
+      {/* Modal del formulario */}
+      {showForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <h2 className="text-xl font-semibold text-gray-900">
-                {editingCourse ? 'Editar Curso' : 'Nuevo Curso'}
+                {editingItem ? 'Editar Curso/Materia' : 'Nuevo Curso/Materia'}
               </h2>
               <button
-                onClick={() => setShowCourseForm(false)}
+                onClick={() => setShowForm(false)}
                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveCourse} className="p-6 space-y-4">
+            <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Nombre del Curso *
+                  Nombre *
                 </label>
                 <input
                   type="text"
-                  value={courseFormData.name}
-                  onChange={(e) => setCourseFormData(prev => ({ ...prev, name: e.target.value }))}
+                  value={formData.nombre}
+                  onChange={(e) => setFormData(prev => ({ ...prev, nombre: e.target.value }))}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Ej: Ingeniería Informática"
+                  placeholder="Ej: Matemáticas Avanzadas"
                   required
                   disabled={isSubmitting}
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Categoría *
+                </label>
+                <select
+                  value={formData.categoria}
+                  onChange={(e) => setFormData(prev => ({ ...prev, categoria: e.target.value }))}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  required
+                  disabled={isSubmitting}
+                >
+                  {CATEGORIAS.map(categoria => (
+                    <option key={categoria} value={categoria}>{categoria}</option>
+                  ))}
+                </select>
               </div>
 
               <div>
@@ -460,11 +659,11 @@ export default function CursosMateriasPage() {
                   Descripción
                 </label>
                 <textarea
-                  value={courseFormData.description}
-                  onChange={(e) => setCourseFormData(prev => ({ ...prev, description: e.target.value }))}
+                  value={formData.descripcion}
+                  onChange={(e) => setFormData(prev => ({ ...prev, descripcion: e.target.value }))}
                   rows={3}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Descripción del curso..."
+                  placeholder="Descripción del curso o materia..."
                   disabled={isSubmitting}
                 />
               </div>
@@ -472,7 +671,7 @@ export default function CursosMateriasPage() {
               <div className="flex justify-end space-x-3 pt-4">
                 <button
                   type="button"
-                  onClick={() => setShowCourseForm(false)}
+                  onClick={() => setShowForm(false)}
                   disabled={isSubmitting}
                   className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
                 >
@@ -484,86 +683,7 @@ export default function CursosMateriasPage() {
                   className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 flex items-center space-x-2"
                 >
                   {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-                  <span>{isSubmitting ? 'Guardando...' : editingCourse ? 'Actualizar' : 'Crear'}</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Subject Form Modal */}
-      {showSubjectForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-900">
-                {editingSubject ? 'Editar Materia' : 'Nueva Materia'}
-              </h2>
-              <button
-                onClick={() => setShowSubjectForm(false)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveSubject} className="p-6 space-y-4">
-              {selectedCourse && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                  <p className="text-sm text-blue-800">
-                    <strong>Curso:</strong> {selectedCourse.name}
-                  </p>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Nombre de la Materia *
-                </label>
-                <input
-                  type="text"
-                  value={subjectFormData.name}
-                  onChange={(e) => setSubjectFormData(prev => ({ ...prev, name: e.target.value }))}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Ej: Programación I"
-                  required
-                  disabled={isSubmitting}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Créditos Académicos *
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max="10"
-                  value={subjectFormData.credits}
-                  onChange={(e) => setSubjectFormData(prev => ({ ...prev, credits: parseInt(e.target.value) || 1 }))}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  required
-                  disabled={isSubmitting}
-                />
-              </div>
-
-              <div className="flex justify-end space-x-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowSubjectForm(false)}
-                  disabled={isSubmitting}
-                  className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 flex items-center space-x-2"
-                >
-                  {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-                  <span>{isSubmitting ? 'Guardando...' : editingSubject ? 'Actualizar' : 'Crear'}</span>
+                  <span>{isSubmitting ? 'Guardando...' : editingItem ? 'Actualizar' : 'Crear'}</span>
                 </button>
               </div>
             </form>
